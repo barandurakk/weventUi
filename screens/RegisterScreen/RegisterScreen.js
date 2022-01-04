@@ -11,29 +11,22 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {useNavigation} from '@react-navigation/native';
 import AuthContext from '../../context/AuthContext';
 
-const LoginScreen = () => {
+const RegisterScreen = () => {
   const authContext = useContext(AuthContext);
   const navigation = useNavigation();
-  const [datePickerShow, setDatePickerShow] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
+    firstname: '',
+    lastname: '',
   });
 
-  const handleLogin = () => {
+  const handleRegister = () => {
     axios
-      .post('http://10.0.2.2:8000/login', formData)
+      .post('http://10.0.2.2:8000/register', formData)
       .then(res => {
-        if (res) {
-          console.log(res.data);
-          AsyncStorage.setItem('userId', res.data.id)
-            .then(success => {
-              authContext.setUserId(res.data.id);
-            })
-            .catch(error => {
-              alert(error);
-            });
-        }
+        alert('Başarıyla kayıt olundu!');
+        navigation.navigate('login');
       })
       .catch(err => alert(err));
   };
@@ -48,18 +41,32 @@ const LoginScreen = () => {
       />
       <TextInput
         style={styles.input}
+        placeholder="Ad"
+        onChange={e =>
+          setFormData({...formData, firstname: e.nativeEvent.text})
+        }
+        value={formData.firstname}
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Soyad"
+        onChange={e => setFormData({...formData, lastname: e.nativeEvent.text})}
+        value={formData.lastname}
+      />
+      <TextInput
+        style={styles.input}
         placeholder="Şifre"
         secureTextEntry
         onChange={e => setFormData({...formData, password: e.nativeEvent.text})}
         value={formData.password}
       />
-      <TouchableOpacity style={styles.createButton} onPress={handleLogin}>
-        <Text style={styles.createButtonText}>Giriş Yap</Text>
+      <TouchableOpacity style={styles.createButton} onPress={handleRegister}>
+        <Text style={styles.createButtonText}>Üye Ol</Text>
       </TouchableOpacity>
       <TouchableOpacity
         style={styles.registerButton}
-        onPress={() => navigation.navigate('register')}>
-        <Text>Üye Ol</Text>
+        onPress={() => navigation.navigate('login')}>
+        <Text>Giriş Yap</Text>
       </TouchableOpacity>
     </View>
   );
@@ -103,4 +110,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default LoginScreen;
+export default RegisterScreen;

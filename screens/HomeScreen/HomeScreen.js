@@ -20,9 +20,10 @@ import {
 } from 'react-native';
 import axios from 'axios';
 import dayjs from 'dayjs';
-import {useNavigation} from '@react-navigation/native';
+import {useNavigation, useFocusEffect} from '@react-navigation/native';
 import AuthContext from '../../context/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Map from '../../components/Map';
 
 export async function requestLocationPermission() {
   try {
@@ -47,24 +48,64 @@ const HomeScreen = () => {
   const [isGranted, setIsGranted] = useState(false);
   const [range, setRange] = useState(0.5);
   const [eventList, setEventList] = useState([]);
-  const [viewMode, setViewMode] = useState('list');
+  const [filteredEventList, setFilteredEventList] = useState([]);
+  const [viewMode, setViewMode] = useState('map');
+  const [detailState, setDetailState] = useState({show: false, eventId: ''});
+  const [addEventState, setAddEventState] = useState({
+    show: false,
+    longitude: null,
+    latitude: null,
+  });
   const [position, setPosition] = useState({
     latitude: 0,
     longitude: 0,
   });
 
   useEffect(() => {
-    if (isGranted) {
+    if ((isGranted, authContext.user.userId)) {
       axios
         .get('http://10.0.2.2:8000/events', {
           headers: {id: authContext.user.userId},
         })
         .then(res => {
+          console.log('fetching!', res.data);
           setEventList([...res.data]);
         })
         .catch(err => console.log(err));
     }
-  }, [range, position]);
+  }, [isGranted, authContext.user.userId]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if ((isGranted, authContext.user.userId)) {
+        axios
+          .get('http://10.0.2.2:8000/events', {
+            headers: {id: authContext.user.userId},
+          })
+          .then(res => {
+            console.log('fetching!', res.data);
+            setEventList([...res.data]);
+          })
+          .catch(err => console.log(err));
+      }
+    }, [isGranted, authContext.user.userId]),
+  );
+
+  useEffect(() => {
+    if (eventList && eventList.length !== 0) {
+      setFilteredEventList(
+        eventList.filter(
+          event =>
+            distance(
+              event.latitude,
+              event.longitude,
+              position.latitude,
+              position.longitude,
+            ) <= range,
+        ),
+      );
+    }
+  }, [eventList, range, position]);
 
   useEffect(() => {
     requestLocationPermission().then(granted => {
@@ -92,6 +133,25 @@ const HomeScreen = () => {
     );
     return () => Geolocation.clearWatch(watchId);
   }, []);
+
+  const handleAddMarker = e => {
+    let coordinates = e.nativeEvent.coordinate;
+    setDetailState({show: false, eventId: ''});
+    setAddEventState({
+      show: true,
+      longitude: coordinates.longitude,
+      latitude: coordinates.latitude,
+    });
+  };
+
+  const handleDetail = eventId => {
+    setAddEventState({
+      show: false,
+      longitude: null,
+      latitude: null,
+    });
+    setDetailState({show: true, eventId});
+  };
 
   const distance = (lat1, lon1, lat2, lon2) => {
     var p = 0.017453292519943295; // Math.PI / 180
@@ -125,26 +185,16 @@ const HomeScreen = () => {
   };
 
   const renderList = () => {
-    const filteredList = eventList.filter(
-      event =>
-        distance(
-          event.latitude,
-          event.longitude,
-          position.latitude,
-          position.longitude,
-        ) <= range,
-    );
-
     return (
       <>
-        {filteredList.length === 0 ? (
+        {filteredEventList.length === 0 ? (
           <Text>
             Yakınlarınızda bir etkinlik bulunanmamıştır. Yukarıdan uzaklığı
             değiştirip tekrar deneyebilirsiniz.
           </Text>
         ) : (
           <ScrollView style={styles.listContainer}>
-            {filteredList.map((event, i) => (
+            {filteredEventList.map((event, i) => (
               <TouchableOpacity key={event.id} style={styles.listItem}>
                 <View>
                   <Text style={styles.eventName}>{event.name}</Text>
@@ -160,101 +210,161 @@ const HomeScreen = () => {
     );
   };
 
+  const renderMap = () => (
+    <Map
+      currentLat={position.latitude}
+      currentLong={position.longitude}
+      events={filteredEventList}
+      onSelectPosition={handleAddMarker}
+      selectedMarker={addEventState}
+      onSelectEvent={handleDetail}
+      onClickOutside={() => {
+        setDetailState({show: false, eventId: ''});
+        setAddEventState({
+          show: false,
+          longitude: null,
+          latitude: null,
+        });
+      }}
+      // onSelectEvent={eventId => navigation.navigate('eventDetail', {eventId})}
+    />
+  );
+
   return (
     <>
-      <View style={styles.container}>
-        <View style={styles.switchContainer}>
-          <Text style={styles.switchText}>Harita Görünümü</Text>
-          <Switch
-            trackColor={{false: '#fff', true: '#fff'}}
-            thumbColor={viewMode === 'list' ? '#f5dd4b' : '#f4f3f4'}
-            ios_backgroundColor="#3e3e3e"
-            onValueChange={() =>
-              setViewMode(prev => (prev === 'list' ? 'map' : 'list'))
-            }
-            value={viewMode === 'list' ? true : false}
-          />
-          <Text style={styles.switchText}>Liste Görünümü</Text>
-        </View>
-        <View style={styles.rangeContainer}>
+      {viewMode === 'list' ? renderList() : renderMap()}
+      {addEventState.show && (
+        <>
           <TouchableOpacity
-            style={[
-              styles.rangeButtons,
-              range === 0.5 ? styles.selectedRangeButton : '',
-            ]}
-            onPress={() => setRange(0.5)}>
-            <Text
-              style={[
-                styles.rangeTexts,
-                range === 0.5 ? styles.selectedRangeButtonText : '',
-              ]}>
-              500m
+            style={styles.addButton}
+            onPress={() =>
+              navigation.navigate('AddNavigation', {
+                latitude: addEventState.latitude,
+                longitude: addEventState.longitude,
+              })
+            }>
+            <Text style={styles.addButtonText}>
+              Seçilen konuma etkinlik ekle
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[
-              styles.rangeButtons,
-              range === 5 ? styles.selectedRangeButton : '',
-            ]}
-            onPress={() => setRange(5)}>
-            <Text
-              style={[
-                styles.rangeTexts,
-                range === 5 ? styles.selectedRangeButtonText : '',
-              ]}>
-              5km
-            </Text>
+            style={styles.cancelButton}
+            onPress={() =>
+              setAddEventState({show: false, longitude: null, latitude: null})
+            }>
+            <Text style={styles.addButtonText}>İptal</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.rangeButtons,
-              range === 25 ? styles.selectedRangeButton : '',
-            ]}
-            onPress={() => setRange(25)}>
-            <Text
-              style={[
-                styles.rangeTexts,
-                range === 25 ? styles.selectedRangeButtonText : '',
-              ]}>
-              25km
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.rangeButtons,
-              range === 100 ? styles.selectedRangeButton : '',
-            ]}
-            onPress={() => setRange(100)}>
-            <Text
-              style={[
-                styles.rangeTexts,
-                range === 100 ? styles.selectedRangeButtonText : '',
-              ]}>
-              100km
-            </Text>
-          </TouchableOpacity>
-        </View>
-        {viewMode === 'list' ? renderList() : <Text>Map</Text>}
-      </View>
-      <TouchableOpacity
-        style={styles.addButton}
-        onPress={() => navigation.navigate('AddNavigation')}>
-        <Text style={styles.addButtonText}>+</Text>
-      </TouchableOpacity>
+        </>
+      )}
+      {detailState.show && (
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={() =>
+            navigation.navigate('eventDetail', {eventId: detailState.eventId})
+          }>
+          <Text style={styles.addButtonText}>Detay görüntüle</Text>
+        </TouchableOpacity>
+      )}
+
       <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
         <Text style={styles.logoutText}> {`Çık`}</Text>
       </TouchableOpacity>
+      <View style={styles.switchContainer}>
+        <Text style={styles.switchText}>Harita Görünümü</Text>
+        <Switch
+          trackColor={{false: '#fff', true: '#fff'}}
+          thumbColor={viewMode === 'list' ? '#f5dd4b' : '#f4f3f4'}
+          ios_backgroundColor="#3e3e3e"
+          onValueChange={() =>
+            setViewMode(prev => (prev === 'list' ? 'map' : 'list'))
+          }
+          value={viewMode === 'list' ? true : false}
+        />
+        <Text style={styles.switchText}>Liste Görünümü</Text>
+      </View>
+      <View style={styles.rangeContainer}>
+        <TouchableOpacity
+          style={[
+            styles.rangeButtons,
+            range === 0.5 ? styles.selectedRangeButton : '',
+          ]}
+          onPress={() => setRange(0.5)}>
+          <Text
+            style={[
+              styles.rangeTexts,
+              range === 0.5 ? styles.selectedRangeButtonText : '',
+            ]}>
+            500m
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.rangeButtons,
+            range === 5 ? styles.selectedRangeButton : '',
+          ]}
+          onPress={() => setRange(5)}>
+          <Text
+            style={[
+              styles.rangeTexts,
+              range === 5 ? styles.selectedRangeButtonText : '',
+            ]}>
+            5km
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.rangeButtons,
+            range === 25 ? styles.selectedRangeButton : '',
+          ]}
+          onPress={() => setRange(25)}>
+          <Text
+            style={[
+              styles.rangeTexts,
+              range === 25 ? styles.selectedRangeButtonText : '',
+            ]}>
+            25km
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.rangeButtons,
+            range === 100 ? styles.selectedRangeButton : '',
+          ]}
+          onPress={() => setRange(100)}>
+          <Text
+            style={[
+              styles.rangeTexts,
+              range === 100 ? styles.selectedRangeButtonText : '',
+            ]}>
+            100km
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.rangeButtons,
+            range === 250 ? styles.selectedRangeButton : '',
+          ]}
+          onPress={() => setRange(250)}>
+          <Text
+            style={[
+              styles.rangeTexts,
+              range === 250 ? styles.selectedRangeButtonText : '',
+            ]}>
+            250km
+          </Text>
+        </TouchableOpacity>
+      </View>
     </>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'column',
-    height: '100%',
-    // marginTop: 50,
-  },
   switchContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: 40,
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'center',
@@ -262,6 +372,7 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     paddingTop: 10,
     backgroundColor: 'red',
+    elevation: 3,
   },
   rangeContainer: {
     display: 'flex',
@@ -272,15 +383,20 @@ const styles = StyleSheet.create({
     paddingTop: 5,
     width: '100%',
     backgroundColor: 'gray',
+    position: 'absolute',
+    top: 40,
+    elevation: 3,
+    left: 0,
   },
   rangeButtons: {
-    marginLeft: 10,
-    marginRight: 10,
+    marginLeft: 5,
+    marginRight: 5,
     paddingVertical: 10,
-    paddingHorizontal: 20,
+    paddingHorizontal: 15,
     backgroundColor: 'red',
     borderRadius: 5,
     shadowRadius: 10,
+    elevation: 2,
   },
   selectedRangeButton: {
     backgroundColor: 'white',
@@ -291,11 +407,25 @@ const styles = StyleSheet.create({
   addButton: {
     position: 'absolute',
     bottom: 20,
-    right: 20,
+    right: 100,
     height: 60,
-    width: 60,
+    paddingHorizontal: 10,
+    width: 'auto',
     borderRadius: 50,
     backgroundColor: 'red',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelButton: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    height: 60,
+    paddingHorizontal: 10,
+    width: 60,
+    borderRadius: 50,
+    backgroundColor: 'black',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -317,7 +447,7 @@ const styles = StyleSheet.create({
   },
   addButtonText: {
     color: '#fff',
-    fontSize: 24,
+    fontSize: 16,
   },
   logoutText: {
     color: '#fff',
@@ -327,7 +457,8 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   listContainer: {
-    height: '100%',
+    height: 'auto',
+    marginTop: 90,
   },
   listItem: {
     padding: 10,

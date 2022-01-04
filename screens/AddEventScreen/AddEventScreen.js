@@ -12,15 +12,17 @@ import dayjs from 'dayjs';
 import {useNavigation} from '@react-navigation/native';
 import AuthContext from '../../context/AuthContext';
 
-const AddEventScreen = () => {
+const AddEventScreen = ({route}) => {
+  const {longitude, latitude} = route.params;
   const authContext = useContext(AuthContext);
   const navigation = useNavigation();
   const [datePickerShow, setDatePickerShow] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     startDate: new Date(),
-    latitude: 0,
-    longitude: 0,
+    latitude: latitude,
+    longitude: longitude,
+    description: '',
   });
 
   const onPressDateInput = e => {
@@ -43,12 +45,14 @@ const AddEventScreen = () => {
 
   return (
     <View style={styles.container}>
+      <Text style={{textAlign: 'left'}}>Etkinlik Adı</Text>
       <TextInput
         style={styles.input}
         placeholder="Etkinlik Adı"
         onChange={e => setFormData({...formData, name: e.nativeEvent.text})}
         value={formData.name}
       />
+      <Text style={{textAlign: 'left'}}>Etkinlik Tarihi</Text>
       <TextInput
         style={styles.input}
         placeholder="Etkinlik Saati"
@@ -67,30 +71,16 @@ const AddEventScreen = () => {
           setDatePickerShow(false);
         }}
       />
-      <View style={styles.inputRow}>
-        <TextInput
-          style={[styles.input, styles.rowInput]}
-          placeholder="Boylam"
-          keyboardType="numeric"
-          onChange={e =>
-            setFormData({
-              ...formData,
-              longitude: parseFloat(e.nativeEvent.text),
-            })
-          }
-          value={formData.longitude}
-        />
-        <TextInput
-          style={[styles.input, styles.rowInput]}
-          placeholder="Enlem"
-          keyboardType="numeric"
-          type="number"
-          onChange={e =>
-            setFormData({...formData, latitude: parseFloat(e.nativeEvent.text)})
-          }
-          value={formData.latitude}
-        />
-      </View>
+      <TextInput
+        style={styles.textArea}
+        placeholder="Etkinlik Açıklaması"
+        multiline
+        numberOfLines={3}
+        onChange={e =>
+          setFormData({...formData, description: e.nativeEvent.text})
+        }
+        value={formData.description}
+      />
       <TouchableOpacity style={styles.createButton} onPress={handleCreate}>
         <Text style={styles.createButtonText}>Etkinlik Oluştur</Text>
       </TouchableOpacity>
@@ -102,22 +92,18 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'column',
     height: '100%',
-    alignItems: 'center',
     padding: 10,
   },
   input: {
-    width: '100%',
     height: 40,
     margin: 12,
     borderWidth: 1,
     padding: 10,
   },
-  inputRow: {
-    display: 'flex',
-    flexDirection: 'row',
-  },
-  rowInput: {
-    flex: 1,
+  textArea: {
+    margin: 12,
+    borderWidth: 1,
+    padding: 10,
   },
   createButton: {
     width: '100%',
